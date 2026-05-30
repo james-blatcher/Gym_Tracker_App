@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Gains" />
+  <meta name="theme-color" content="#080808" />
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Apple touch icon: pink dumbbell SVG inlined as data URI -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+
+  <title>Gains-O-Matic</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Inconsolata:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:         #080808;
+      --surface:    #111111;
+      --surface2:   #181818;
+      --border:     #242424;
+      --accent:     #FF6B9D;
+      --accent2:    #00D4C8;
+      --accentDim:  rgba(255,107,157,0.12);
+      --accentBrd:  rgba(255,107,157,0.35);
+      --teal:       #00D4C8;
+      --tealDim:    rgba(0,212,200,0.1);
+      --tealBrd:    rgba(0,212,200,0.3);
+      --green:      #34d399;
+      --greenDim:   rgba(52,211,153,0.1);
+      --greenBrd:   rgba(52,211,153,0.3);
+      --text:       #ededed;
+      --muted:      #666;
+      --dim:        #333;
+      --safe-top:   env(safe-area-inset-top, 0px);
+      --safe-bot:   env(safe-area-inset-bottom, 0px);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Barlow', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ── Scrollable content area ── */
+    #scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(60px + var(--safe-bot));
+    }
+
+    /* ── Header ── */
+    #header {
+      padding: calc(var(--safe-top) + 16px) 18px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .app-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px;
+      letter-spacing: 2.5px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .app-subtitle {
+      font-family: 'Inconsolata', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-top: 3px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .done-badge {
+      font-family: 'Inconsolata', monospace;
+      font-size: 10px;
+      color: var(--accent);
+      background: var(--accentDim);
+      border: 1px solid var(--accentBrd);
+      border-radius: 5px;
+      padding: 3px 8px;
+    }
+
+    .icon-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-family: 'Barlow', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .icon-btn:active { transform: scale(0.96); }
+    .icon-btn.connected {
+      border-color: var(--tealBrd);
+      color: var(--teal);
+      background: var(--tealDim);
+    }
+    .icon-btn.syncing {
+      border-color: var(--accentBrd);
+      color: var(--accent);
+    }
+
+    /* ── Nav tabs ── */
+    #nav {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+
+    .nav-item {
+      flex: 1;
+      padding: 11px 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: none;
+      border: none;
+      cursor: pointer;
+      transition: color .15s;
+      border-bottom: 2px solid transparent;
+      font-family: 'Barlow', sans-serif;
+    }
+    .nav-item.on  { color: var(--accent); border-bottom-color: var(--accent); }
+    .nav-item.off { color: #444; }
+
+    /* ── Category pills ── */
+    .cat-bar {
+      display: flex;
+      gap: 7px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .cat-bar::-webkit-scrollbar { display: none; }
+
+    .cat-pill {
+      padding: 6px 13px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      cursor: pointer;
+      border: none;
+      font-family: 'Barlow', sans-serif;
+      white-space: nowrap;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .cat-pill.on  { background: var(--accent); color: #000; }
+    .cat-pill.off { background: var(--surface2); color: var(--muted); }
+    .cat-pill.off:active { color: var(--text); }
+
+    /* ── Subgroup label ── */
+    .subgroup-label {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      padding: 13px 0 7px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 7px;
+    }
+
+    /* ── Exercise card ── */
+    .ex-card {
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .15s, background .15s;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .ex-card:active { transform: scale(0.99); }
+    .ex-card.open { border-radius: 8px 8px 0 0; margin-bottom: 0; }
+
+    .ex-card-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ex-left { display: flex; align-items: center; gap: 11px; }
+
+    .ex-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+    }
+
+    .ex-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 17px;
+      letter-spacing: 1px;
+      line-height: 1.1;
+    }
+
+    .ex-meta {
+      font-family: 'Inconsolata', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .ex-weight {
+      text-align: right;
+    }
+    .ex-weight-val {
+      font-family: 'Inconsolata', monospace;
+      font-weight: 700;
+      font-size: 20px;
+      line-height: 1;
+    }
+    .ex-weight-unit {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .ex-pb-badge {
+      font-size: 9px;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .logged-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--green);
+    }
+
+    /* ── Expand panel ── */
+    .expand-panel {
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      padding: 14px;
+      margin-bottom: 6px;
+      animation: expandIn .18s ease;
+    }
+
+    @keyframes expandIn {
+      from { opacity: 0; transform: scaleY(0.92); transform-origin: top; }
+      to   { opacity: 1; transform: scaleY(1); }
+    }
+
+    .stat-row { display: flex; gap: 7px; margin-bottom: 12px; }
+
+    .stat-box {
+      flex: 1;
+      border-radius: 6px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .stat-box-label {
+      font-size: 8px;
+      letter-spacing: 1.8px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-family: 'Barlow', sans-serif;
+    }
+    .stat-box-val {
+      font-family: 'Inconsolata', monospace;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .input-row { display: flex; gap: 8px; align-items: stretch; }
+
+    .weight-wrap { flex: 1; position: relative; }
+    .weight-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 48px 12px 14px;
+      color: var(--text);
+      font-size: 24px;
+      font-family: 'Inconsolata', monospace;
+      font-weight: 700;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .weight-input:focus { border-color: var(--accent); }
+    input[type=number] { -moz-appearance: textfield; }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .kg-label {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'Inconsolata', monospace;
+      pointer-events: none;
+    }
+
+    .log-btn {
+      padding: 0 18px;
+      border-radius: 6px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 17px;
+      letter-spacing: 1.2px;
+      border: none;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .log-btn:not(:disabled):active { transform: scale(0.96); }
+    .log-btn:disabled { cursor: not-allowed; background: var(--dim) !important; color: #444 !important; }
+
+    .chips-row { display: flex; gap: 5px; margin-top: 8px; }
+    .chip {
+      flex: 1;
+      padding: 6px 0;
+      border-radius: 5px;
+      font-size: 11px;
+      font-family: 'Inconsolata', monospace;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .chip.active {
+      background: var(--accentDim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .chip:active { transform: scale(0.97); }
+
+    .hint-text {
+      font-size: 9px;
+      color: var(--dim);
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+    }
+
+    .lower-note {
+      font-size: 9px;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 9px;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Log view padding ── */
+    .log-inner { padding: 12px 18px; }
+
+    /* ── History view ── */
+    .history-inner { padding: 14px 18px; }
+
+    .hist-date-label {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 12px;
+      letter-spacing: 2.5px;
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .today-chip {
+      font-size: 9px;
+      background: var(--accentDim);
+      border: 1px solid var(--accentBrd);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+
+    .hist-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--surface);
+      border-radius: 6px;
+      margin-bottom: 5px;
+      border: 1px solid var(--border);
+    }
+    .hist-entry.is-pb { border-color: var(--accentBrd); }
+
+    .hist-name { font-weight: 600; font-size: 13px; }
+    .hist-meta { font-family: 'Inconsolata', monospace; font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+    .hist-weight {
+      font-family: 'Inconsolata', monospace;
+      font-weight: 700;
+      font-size: 19px;
+      text-align: right;
+      line-height: 1;
+    }
+    .hist-pb { font-size: 9px; color: var(--accent); margin-top: 2px; letter-spacing: 1px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      top: calc(var(--safe-top) + 16px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #000;
+      padding: 9px 20px;
+      border-radius: 6px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 17px;
+      letter-spacing: 1.2px;
+      z-index: 9999;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 6px 24px rgba(255,107,157,0.4);
+      animation: slideDown .25s cubic-bezier(.22,1,.36,1);
+    }
+    #toast.teal {
+      background: var(--teal);
+      box-shadow: 0 6px 24px rgba(0,212,200,0.4);
+    }
+    #toast.error {
+      background: #ff4d4d;
+      box-shadow: 0 6px 24px rgba(255,77,77,0.4);
+    }
+
+    @keyframes slideDown {
+      from { transform: translateX(-50%) translateY(-12px); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+    }
+
+    /* ── Google auth modal ── */
+    #auth-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: flex-end;
+      z-index: 8888;
+      padding-bottom: var(--safe-bot);
+    }
+    #auth-modal.hidden { display: none; }
+
+    .auth-sheet {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 18px 18px 0 0;
+      border: 1px solid var(--border);
+      padding: 28px 24px calc(24px + var(--safe-bot));
+    }
+    .auth-handle {
+      width: 36px; height: 4px;
+      background: var(--dim);
+      border-radius: 2px;
+      margin: 0 auto 22px;
+    }
+    .auth-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .auth-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .auth-desc strong { color: var(--text); }
+    .auth-btn {
+      width: 100%;
+      padding: 15px;
+      border-radius: 8px;
+      border: none;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #000;
+      margin-bottom: 10px;
+      transition: all .15s;
+    }
+    .auth-btn:active { transform: scale(0.98); }
+    .auth-skip {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: 'Barlow', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      color: var(--muted);
+    }
+
+    /* ── Setup modal ── */
+    #setup-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 8889;
+      padding: 20px;
+    }
+    #setup-modal.hidden { display: none; }
+    .setup-sheet {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 28px 22px;
+    }
+    .setup-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .setup-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+    .setup-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 11px 13px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: 'Inconsolata', monospace;
+      outline: none;
+      margin-bottom: 14px;
+    }
+    .setup-input:focus { border-color: var(--accent); }
+    .setup-help {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 18px;
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+    }
+    .setup-help code {
+      color: var(--teal);
+      font-family: 'Inconsolata', monospace;
+    }
+    .setup-btn {
+      width: 100%;
+      padding: 13px;
+      border-radius: 7px;
+      border: none;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 17px;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #000;
+      transition: all .15s;
+    }
+    .setup-btn:active { transform: scale(0.98); }
+
+    /* ── Sync status bar ── */
+    #sync-bar {
+      position: fixed;
+      bottom: calc(60px + var(--safe-bot));
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface2);
+      border: 1px solid var(--tealBrd);
+      color: var(--teal);
+      font-family: 'Inconsolata', monospace;
+      font-size: 10px;
+      padding: 5px 14px;
+      border-radius: 20px;
+      z-index: 100;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .3s;
+      white-space: nowrap;
+    }
+    #sync-bar.show { opacity: 1; }
+
+    /* ── Bottom nav bar (empty space guard) ── */
+    #bottom-nav {
+      height: calc(60px + var(--safe-bot));
+      flex-shrink: 0;
+      display: none; /* spacer handled by padding-bottom on scroll-area */
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      margin-top: 80px;
+      padding: 0 20px;
+    }
+    .empty-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .empty-sub { font-size: 13px; color: var(--dim); }
+
+    /* ── Miami accent stripe ── */
+    .miami-stripe {
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--teal) 50%, var(--accent) 100%);
+      flex-shrink: 0;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div class="miami-stripe"></div>
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="header-row">
+      <div>
+        <div class="app-title">GAINS-O-MATIC</div>
+        <div class="app-subtitle" id="date-label"></div>
+      </div>
+      <div class="header-right">
+        <span id="done-badge" class="done-badge" style="display:none"></span>
+        <button class="icon-btn" id="sync-btn" onclick="handleSyncBtn()">⚡ SYNC</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div id="nav">
+    <button class="nav-item on" onclick="switchView('log')" id="nav-log">LOG</button>
+    <button class="nav-item off" onclick="switchView('history')" id="nav-history">HISTORY</button>
+    <button class="nav-item off" onclick="switchView('pbs')" id="nav-pbs">PBs</button>
+  </div>
+
+  <!-- SCROLL AREA -->
+  <div id="scroll-area">
+
+    <!-- LOG VIEW -->
+    <div id="view-log">
+      <div class="cat-bar" id="cat-bar"></div>
+      <div class="log-inner" id="exercise-list"></div>
+    </div>
+
+    <!-- HISTORY VIEW -->
+    <div id="view-history" style="display:none">
+      <div class="history-inner" id="history-content"></div>
+    </div>
+
+    <!-- PBs VIEW -->
+    <div id="view-pbs" style="display:none">
+      <div class="history-inner" id="pbs-content"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="display:none"></div>
+
+<!-- SYNC BAR -->
+<div id="sync-bar">↑ syncing to sheets…</div>
+
+<!-- GOOGLE AUTH MODAL -->
+<div id="auth-modal" class="hidden">
+  <div class="auth-sheet">
+    <div class="auth-handle"></div>
+    <div class="auth-title">CONNECT GOOGLE SHEETS</div>
+    <div class="auth-desc">
+      Auto-sync every set to a <strong>Google Sheet</strong> on your Drive.<br><br>
+      You'll need to sign in with Google and enter your <strong>Client ID</strong> from Google Cloud Console.
+      <br><br>Tap <strong>SET UP</strong> to enter your credentials, or <strong>Skip</strong> to use offline only.
+    </div>
+    <button class="auth-btn" onclick="showSetup()">SET UP GOOGLE SYNC</button>
+    <button class="auth-skip" onclick="dismissAuth()">Skip for now — use offline</button>
+  </div>
+</div>
+
+<!-- SETUP MODAL -->
+<div id="setup-modal" class="hidden">
+  <div class="setup-sheet">
+    <div class="setup-title">GOOGLE SETUP</div>
+    <div class="setup-help">
+      <strong>One-time setup:</strong><br>
+      1. Go to <code>console.cloud.google.com</code><br>
+      2. Create a project → Enable <code>Google Sheets API</code><br>
+      3. Create OAuth 2.0 credentials (Web app)<br>
+      4. Add <code>this page's URL</code> as authorised origin<br>
+      5. Paste your Client ID below
+    </div>
+    <label class="setup-label">GOOGLE CLIENT ID</label>
+    <input class="setup-input" id="client-id-input" type="text" placeholder="123456.apps.googleusercontent.com" />
+    <label class="setup-label">SPREADSHEET ID (optional — leave blank to create new)</label>
+    <input class="setup-input" id="sheet-id-input" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" />
+    <button class="setup-btn" onclick="saveSetup()">SAVE & CONNECT</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// PROGRAMME DATA
+// ─────────────────────────────────────────────────────────────────────────────
+const PROGRAM = {
+  Pull: {
+    BACK: [
+      { id: "wide_grip_pull_ups",    name: "Wide Grip Pull Ups",     sets: 4, reps: 8,  lowerIsBetter: true },
+      { id: "lat_pull_down",         name: "Lat Pull Down",          sets: 4, reps: 8  },
+      { id: "bent_over_rows",        name: "Bent Over Rows",         sets: 4, reps: 6  },
+    ],
+    BICEPS: [
+      { id: "standing_db_curls",     name: "Standing DB Curls",      sets: 4, reps: 6  },
+      { id: "preacher_curls",        name: "Preacher Curls",         sets: 4, reps: 6  },
+      { id: "barbell_forearm_curls", name: "Barbell Forearm Curls",  sets: 4, reps: 8  },
+    ],
+  },
+  Push: {
+    CHEST: [
+      { id: "bench",                 name: "Bench",                  sets: 5, reps: 6  },
+      { id: "incline_db_press",      name: "Incline Dumbbell Press", sets: 4, reps: 8  },
+      { id: "seated_flys",           name: "Seated Flys",            sets: 4, reps: 6  },
+    ],
+    TRICEPS: [
+      { id: "tricep_extension",      name: "Tricep Extension",       sets: 4, reps: 8  },
+      { id: "dips",                  name: "Dips",                   sets: 4, reps: 8,  lowerIsBetter: true },
+      { id: "tricep_cable_pushdown", name: "Tricep Cable Push Down", sets: 4, reps: 12 },
+    ],
+  },
+  "Legs/Shoulders": {
+    LEGS: [
+      { id: "squats",                name: "Squats",                 sets: 5, reps: 6  },
+      { id: "incline_leg_press",     name: "Incline Leg Press",      sets: 4, reps: 8  },
+      { id: "hamstring_machine",     name: "Hamstring Machine",      sets: 4, reps: 10 },
+      { id: "quad_machine",          name: "Quad Machine",           sets: 4, reps: 10 },
+      { id: "seated_calf_raises",    name: "Seated Calf Raises",     sets: 4, reps: 12 },
+    ],
+    SHOULDERS: [
+      { id: "overhead_press",        name: "Overhead Press",         sets: 4, reps: 8  },
+      { id: "dumbbell_press",        name: "Dumbbell Press",         sets: 4, reps: 8  },
+      { id: "cable_lat_raises",      name: "Cable Lat Raises",       sets: 4, reps: 8  },
+      { id: "rear_delts",            name: "Rear Delts",             sets: 4, reps: 10 },
+    ],
+  },
+};
+
+const allExercises  = cat => Object.values(PROGRAM[cat]).flat();
+const findExercise  = id  => Object.values(PROGRAM).flatMap(g => Object.values(g).flat()).find(e => e.id === id);
+const todayISO      = ()  => new Date().toISOString().split("T")[0];
+const fmtDate       = d   => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let sessions    = [];
+let category    = "Pull";
+let selectedId  = null;
+let weightInput = "";
+let currentView = "log";
+let today       = todayISO();
+
+// Google / sync state
+let gsiLoaded      = false;
+let tokenClient    = null;
+let accessToken    = null;
+let clientId       = localStorage.getItem("gains_client_id") || "";
+let spreadsheetId  = localStorage.getItem("gains_sheet_id")  || "";
+let syncQueue      = [];
+let isSyncing      = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSISTENCE
+// ─────────────────────────────────────────────────────────────────────────────
+function loadData() {
+  try {
+    const r = localStorage.getItem("gains_v1");
+    if (r) sessions = JSON.parse(r);
+  } catch {}
+}
+
+function persist(next) {
+  sessions = next;
+  try { localStorage.setItem("gains_v1", JSON.stringify(next)); } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGIC
+// ─────────────────────────────────────────────────────────────────────────────
+function getTodayLog() { return sessions.filter(s => s.date === today); }
+
+function getPB(id) {
+  const ex = findExercise(id);
+  const ws = sessions.filter(s => s.exerciseId === id).map(s => s.weight);
+  if (!ws.length) return null;
+  return ex?.lowerIsBetter ? Math.min(...ws) : Math.max(...ws);
+}
+
+function isBetter(id, w) {
+  const ex = findExercise(id);
+  const pb = getPB(id);
+  if (pb === null) return true;
+  return ex?.lowerIsBetter ? w < pb : w > pb;
+}
+
+function getLastWeight(id) {
+  const e = sessions.filter(s => s.exerciseId === id && s.date !== today)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  return e[0]?.weight ?? null;
+}
+
+function getTodayWeight(id) { return getTodayLog().find(s => s.exerciseId === id)?.weight ?? null; }
+
+function logWeight() {
+  if (!selectedId || !weightInput) return;
+  const w  = parseFloat(weightInput);
+  if (isNaN(w) || w <= 0) return;
+  const ex = findExercise(selectedId);
+  if (!ex) return;
+
+  const subgroup = Object.entries(PROGRAM[category]).find(([, exs]) => exs.some(e => e.id === ex.id))?.[0] ?? "";
+  const isNewPB  = isBetter(ex.id, w);
+
+  const entry = {
+    id: Date.now().toString(), date: today,
+    exerciseId: ex.id, exerciseName: ex.name,
+    category, subgroup, weight: w, sets: ex.sets, reps: ex.reps,
+  };
+
+  const filtered = sessions.filter(s => !(s.exerciseId === ex.id && s.date === today));
+  persist([...filtered, entry]);
+
+  showToast(isNewPB ? `🏆 NEW PB — ${w}kg!` : `✓ ${w}kg logged`, isNewPB ? "" : "");
+
+  // Queue sync
+  queueSync(entry, isNewPB);
+
+  weightInput = "";
+  selectedId  = null;
+  renderLog();
+  updateDoneBadge();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOOGLE SHEETS SYNC
+// ─────────────────────────────────────────────────────────────────────────────
+function loadGSI() {
+  if (gsiLoaded || !clientId) return;
+  const script = document.createElement("script");
+  script.src = "https://accounts.google.com/gsi/client";
+  script.onload = initTokenClient;
+  document.head.appendChild(script);
+}
+
+function initTokenClient() {
+  gsiLoaded = true;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+    callback: (resp) => {
+      if (resp.error) { showToast("Auth failed", "error"); return; }
+      accessToken = resp.access_token;
+      updateSyncBtn();
+      showToast("Connected to Google ✓", "teal");
+      // If no spreadsheet yet, create one
+      if (!spreadsheetId) {
+        createSpreadsheet();
+      } else {
+        flushQueue();
+      }
+    },
+  });
+}
+
+function requestToken() {
+  if (!tokenClient) { showToast("Set up Google first", "error"); return; }
+  tokenClient.requestAccessToken({ prompt: "" });
+}
+
+function handleSyncBtn() {
+  if (!clientId) {
+    document.getElementById("auth-modal").classList.remove("hidden");
+    return;
+  }
+  if (!accessToken) {
+    if (!gsiLoaded) loadGSI();
+    setTimeout(() => requestToken(), gsiLoaded ? 0 : 800);
+    return;
+  }
+  flushQueue();
+}
+
+function updateSyncBtn() {
+  const btn = document.getElementById("sync-btn");
+  if (accessToken) {
+    btn.textContent = "⚡ SYNCED";
+    btn.classList.add("connected");
+    btn.classList.remove("syncing");
+  } else if (clientId) {
+    btn.textContent = "⚡ SIGN IN";
+    btn.classList.remove("connected");
+  } else {
+    btn.textContent = "⚡ SYNC";
+    btn.classList.remove("connected");
+  }
+}
+
+async function createSpreadsheet() {
+  showSyncBar();
+  try {
+    const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        properties: { title: "Gains-O-Matic" },
+        sheets: [{ properties: { title: "Sessions" } }],
+      }),
+    });
+    const data = await res.json();
+    spreadsheetId = data.spreadsheetId;
+    localStorage.setItem("gains_sheet_id", spreadsheetId);
+
+    // Write header row
+    await appendRows([["Date", "Category", "Subgroup", "Exercise", "Sets", "Reps", "Weight (kg)", "PB?"]]);
+    hideSyncBar();
+    showToast("Sheet created ✓", "teal");
+    flushQueue();
+  } catch (e) {
+    hideSyncBar();
+    showToast("Sheet creation failed", "error");
+  }
+}
+
+function queueSync(entry, isPB) {
+  syncQueue.push({ entry, isPB });
+  if (accessToken) flushQueue();
+}
+
+async function flushQueue() {
+  if (isSyncing || !syncQueue.length || !accessToken || !spreadsheetId) return;
+  isSyncing = true;
+  showSyncBar();
+
+  const batch = [...syncQueue];
+  syncQueue   = [];
+
+  const rows = batch.map(({ entry, isPB }) => [
+    entry.date, entry.category, entry.subgroup,
+    entry.exerciseName, entry.sets, entry.reps, entry.weight,
+    isPB ? "PB" : "",
+  ]);
+
+  try {
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:H1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: rows }),
+      }
+    );
+    if (!res.ok) throw new Error("Sheets error");
+    hideSyncBar();
+    updateSyncBtn();
+  } catch {
+    // Put items back
+    syncQueue = [...batch, ...syncQueue];
+    hideSyncBar();
+    showToast("Sync failed — will retry", "error");
+  }
+  isSyncing = false;
+}
+
+function showSyncBar() {
+  document.getElementById("sync-bar").classList.add("show");
+  const btn = document.getElementById("sync-btn");
+  btn.classList.add("syncing");
+  btn.textContent = "↑ SYNCING";
+}
+
+function hideSyncBar() {
+  document.getElementById("sync-bar").classList.remove("show");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETUP / AUTH MODAL HANDLERS
+// ─────────────────────────────────────────────────────────────────────────────
+function showSetup() {
+  document.getElementById("auth-modal").classList.add("hidden");
+  document.getElementById("setup-modal").classList.remove("hidden");
+  if (clientId) document.getElementById("client-id-input").value = clientId;
+  if (spreadsheetId) document.getElementById("sheet-id-input").value = spreadsheetId;
+}
+
+function saveSetup() {
+  const cid = document.getElementById("client-id-input").value.trim();
+  const sid = document.getElementById("sheet-id-input").value.trim();
+  if (!cid) { showToast("Enter your Client ID", "error"); return; }
+  clientId = cid;
+  localStorage.setItem("gains_client_id", clientId);
+  if (sid) {
+    spreadsheetId = sid;
+    localStorage.setItem("gains_sheet_id", spreadsheetId);
+  }
+  document.getElementById("setup-modal").classList.add("hidden");
+  loadGSI();
+  setTimeout(() => requestToken(), 800);
+}
+
+function dismissAuth() {
+  document.getElementById("auth-modal").classList.add("hidden");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function renderAll() {
+  document.getElementById("date-label").textContent = fmtDate(today);
+  renderCatBar();
+  renderLog();
+  updateDoneBadge();
+  updateSyncBtn();
+  if (currentView === "history") renderHistory();
+  if (currentView === "pbs")     renderPBs();
+}
+
+function renderCatBar() {
+  const bar = document.getElementById("cat-bar");
+  bar.innerHTML = Object.keys(PROGRAM).map(cat =>
+    `<button class="cat-pill ${cat === category ? "on" : "off"}" onclick="selectCat('${cat}')">${cat.toUpperCase()}</button>`
+  ).join("");
+}
+
+function renderLog() {
+  const todayLog = getTodayLog();
+  const list     = document.getElementById("exercise-list");
+  let html       = "";
+
+  Object.entries(PROGRAM[category]).forEach(([subgroup, exercises]) => {
+    html += `<div class="subgroup-label">${subgroup}</div>`;
+    exercises.forEach(ex => {
+      const isOn    = selectedId === ex.id;
+      const lastW   = getLastWeight(ex.id);
+      const pb      = getPB(ex.id);
+      const todayW  = getTodayWeight(ex.id);
+      const logged  = todayW !== null;
+
+      const cardBg  = isOn ? "var(--accentDim)" : logged ? "var(--greenDim)" : "var(--surface)";
+      const cardBrd = isOn ? "var(--accent)"    : logged ? "var(--greenBrd)" : "var(--border)";
+      const dotBrd  = isOn ? "var(--accent)"    : logged ? "var(--green)"    : "var(--dim)";
+      const namCol  = isOn ? "var(--accent)"    : logged ? "var(--green)"    : "var(--text)";
+      const dotBg   = isOn ? "var(--accent)"    : "transparent";
+
+      const dotInner = isOn
+        ? `<div style="width:6px;height:6px;border-radius:50%;background:#000"></div>`
+        : logged ? `<div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>` : "";
+
+      let weightRight = "";
+      if (logged) {
+        const isTodayPB = pb !== null && todayW === pb;
+        weightRight = `
+          <div class="ex-weight">
+            <div class="ex-weight-val" style="color:${isTodayPB ? "var(--accent)" : "var(--green)"}">
+              ${todayW}<span class="ex-weight-unit">kg</span>
+            </div>
+            ${isTodayPB ? `<div class="ex-pb-badge" style="color:var(--accent)">🏆 PB</div>` : ""}
+          </div>`;
+      } else if (lastW !== null) {
+        weightRight = `<div class="ex-weight-val" style="font-family:'Inconsolata',monospace;font-size:14px;color:var(--dim)">${lastW}<span style="font-size:10px">kg</span></div>`;
+      } else {
+        weightRight = `<div style="font-size:9px;color:var(--dim);letter-spacing:.5px">NO DATA</div>`;
+      }
+
+      html += `
+        <div class="ex-card ${isOn ? "open" : ""}" onclick="handleSelect('${ex.id}')"
+          style="background:${cardBg};border:1px solid ${cardBrd};">
+          ${logged && !isOn ? `<div class="logged-bar"></div>` : ""}
+          <div class="ex-card-inner">
+            <div class="ex-left">
+              <div class="ex-dot" style="border:2px solid ${dotBrd};background:${dotBg}">${dotInner}</div>
+              <div>
+                <div class="ex-name" style="color:${namCol}">
+                  ${ex.name}
+                  ${ex.lowerIsBetter ? `<span style="font-size:8px;letter-spacing:1.5px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 4px;vertical-align:middle">↓ LOWER=BETTER</span>` : ""}
+                </div>
+                <div class="ex-meta">${ex.sets} × ${ex.reps} reps</div>
+              </div>
+            </div>
+            ${weightRight}
+          </div>
+        </div>`;
+
+      if (isOn) {
+        const chips = lastW !== null
+          ? [lastW - 2.5, lastW, lastW + 2.5, lastW + 5].filter(v => v > 0)
+          : [];
+
+        html += `
+          <div class="expand-panel">
+            ${ex.lowerIsBetter ? `<div class="lower-note">↓ LOWER IS BETTER — PB is your lowest recorded weight</div>` : ""}
+            <div class="stat-row">
+              <div class="stat-box">
+                <div class="stat-box-label" style="color:var(--muted)">LAST SESSION</div>
+                <div class="stat-box-val" style="color:var(--text)">${lastW !== null ? lastW + " kg" : "—"}</div>
+              </div>
+              <div class="stat-box" style="background:var(--accentDim);border-color:var(--accentBrd)">
+                <div class="stat-box-label" style="color:var(--accent)">PERSONAL BEST</div>
+                <div class="stat-box-val" style="color:var(--accent)">${pb !== null ? pb + " kg" : "—"}</div>
+              </div>
+              ${todayW !== null ? `
+              <div class="stat-box" style="background:var(--greenDim);border-color:var(--greenBrd)">
+                <div class="stat-box-label" style="color:var(--green)">TODAY</div>
+                <div class="stat-box-val" style="color:var(--green)">${todayW} kg</div>
+              </div>` : ""}
+            </div>
+            <div class="input-row">
+              <div class="weight-wrap">
+                <input class="weight-input" id="w-input" type="number" step="0.5" min="0"
+                  value="${weightInput}" placeholder="0.0"
+                  oninput="weightInput=this.value"
+                  onkeydown="if(event.key==='Enter')logWeight()"
+                  autofocus />
+                <span class="kg-label">kg</span>
+              </div>
+              <button class="log-btn" onclick="logWeight()" ${!weightInput ? "disabled" : ""}
+                style="background:${weightInput ? "var(--accent)" : "var(--dim)"};color:${weightInput ? "#000" : "#444"}">
+                ${todayW !== null ? "UPDATE" : "LOG IT"}
+              </button>
+            </div>
+            ${chips.length ? `
+            <div class="chips-row">
+              ${chips.map(v => `
+                <button class="chip ${parseFloat(weightInput) === v ? "active" : ""}"
+                  onclick="setChip(${v})">${v}</button>
+              `).join("")}
+            </div>` : ""}
+            <div class="hint-text">TAP A CHIP OR TYPE · ENTER TO LOG</div>
+          </div>`;
+      }
+    });
+  });
+
+  list.innerHTML = html;
+
+  // Auto-focus weight input if open
+  const inp = document.getElementById("w-input");
+  if (inp) setTimeout(() => inp.focus(), 80);
+}
+
+function renderHistory() {
+  const byDate = sessions.reduce((acc, s) => { (acc[s.date] ||= []).push(s); return acc; }, {});
+  const dates  = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a));
+
+  if (!dates.length) {
+    document.getElementById("history-content").innerHTML = `
+      <div class="empty-state">
+        <div class="empty-title">NO SESSIONS YET</div>
+        <div class="empty-sub">Go lift something heavy.</div>
+      </div>`;
+    return;
+  }
+
+  let html = "";
+  dates.forEach(date => {
+    const entries  = byDate[date].sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+    const isToday  = date === today;
+    const col      = isToday ? "var(--accent)" : "var(--muted)";
+    const brd      = isToday ? "var(--accentBrd)" : "var(--border)";
+
+    html += `
+      <div style="margin-bottom:24px">
+        <div class="hist-date-label" style="color:${col};border-bottom:1px solid ${brd}">
+          <span>${fmtDate(date)}</span>
+          ${isToday ? `<span class="today-chip" style="color:var(--accent)">TODAY</span>` : ""}
+        </div>
+        <div>`;
+
+    entries.forEach(s => {
+      const pb     = getPB(s.exerciseId);
+      const isBest = pb !== null && s.weight === pb;
+      html += `
+        <div class="hist-entry ${isBest ? "is-pb" : ""}">
+          <div>
+            <div class="hist-name">${s.exerciseName}</div>
+            <div class="hist-meta">${s.sets} × ${s.reps} · ${s.subgroup || s.category}</div>
+          </div>
+          <div>
+            <div class="hist-weight" style="color:${isBest ? "var(--accent)" : "var(--text)"}">
+              ${s.weight}<span style="font-size:10px;color:var(--muted)">kg</span>
+            </div>
+            ${isBest ? `<div class="hist-pb">🏆 PB</div>` : ""}
+          </div>
+        </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  document.getElementById("history-content").innerHTML = html;
+}
+
+function renderPBs() {
+  const allExs = Object.values(PROGRAM).flatMap(g => Object.values(g).flat());
+  let html = "";
+
+  Object.entries(PROGRAM).forEach(([cat, groups]) => {
+    html += `<div style="margin-bottom:26px">
+      <div class="hist-date-label" style="color:var(--accent);border-bottom:1px solid var(--accentBrd)">
+        <span>${cat.toUpperCase()}</span>
+      </div>
+      <div>`;
+
+    Object.entries(groups).forEach(([sg, exs]) => {
+      html += `<div class="subgroup-label" style="padding:10px 0 5px">${sg}</div>`;
+      exs.forEach(ex => {
+        const pb     = getPB(ex.id);
+        const lastW  = getLastWeight(ex.id);
+        const hasPB  = pb !== null;
+        html += `
+          <div class="hist-entry ${hasPB ? "is-pb" : ""}">
+            <div>
+              <div class="hist-name">${ex.name}</div>
+              <div class="hist-meta">${ex.sets}×${ex.reps} · ${ex.lowerIsBetter ? "↓ lower=better" : "↑ heavier=better"}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="hist-weight" style="color:${hasPB ? "var(--accent)" : "var(--dim)"}">
+                ${hasPB ? pb + "<span style='font-size:10px;color:var(--muted)'>kg</span>" : "—"}
+              </div>
+              ${lastW !== null ? `<div style="font-size:9px;color:var(--muted);margin-top:2px">LAST: ${lastW}kg</div>` : ""}
+            </div>
+          </div>`;
+      });
+    });
+
+    html += `</div></div>`;
+  });
+
+  document.getElementById("pbs-content").innerHTML = html;
+}
+
+function updateDoneBadge() {
+  const badge   = document.getElementById("done-badge");
+  const todayN  = getTodayLog().length;
+  const totalN  = allExercises(category).length;
+  if (todayN > 0) {
+    badge.style.display = "block";
+    badge.textContent   = `${todayN}/${totalN} done`;
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI INTERACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+function selectCat(cat) {
+  category   = cat;
+  selectedId = null;
+  weightInput = "";
+  renderCatBar();
+  renderLog();
+  updateDoneBadge();
+}
+
+function handleSelect(id) {
+  if (selectedId === id) {
+    selectedId  = null;
+    weightInput = "";
+  } else {
+    selectedId  = id;
+    const last  = getLastWeight(id);
+    weightInput = last !== null ? String(last) : "";
+  }
+  renderLog();
+}
+
+function setChip(v) {
+  weightInput = String(v);
+  const inp = document.getElementById("w-input");
+  if (inp) inp.value = v;
+  renderLog();
+}
+
+function switchView(v) {
+  currentView = v;
+  ["log", "history", "pbs"].forEach(n => {
+    document.getElementById(`view-${n}`).style.display  = n === v ? "" : "none";
+    const nav = document.getElementById(`nav-${n}`);
+    nav.className = `nav-item ${n === v ? "on" : "off"}`;
+  });
+  document.getElementById("scroll-area").scrollTop = 0;
+  if (v === "history") renderHistory();
+  if (v === "pbs")     renderPBs();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type = "") {
+  const el  = document.getElementById("toast");
+  el.textContent = msg;
+  el.className   = type || "";
+  el.style.display = "block";
+  el.style.animation = "none";
+  el.offsetHeight; // reflow
+  el.style.animation = "";
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = "none"; }, 2600);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVICE WORKER
+// ─────────────────────────────────────────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+loadData();
+renderAll();
+
+// Show auth prompt on first load if no client ID set
+if (!clientId && !localStorage.getItem("gains_auth_dismissed")) {
+  setTimeout(() => {
+    document.getElementById("auth-modal").classList.remove("hidden");
+  }, 1200);
+}
+
+// Load GSI if already configured
+if (clientId) loadGSI();
+
+// Intercept dismiss
+document.getElementById("auth-modal").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("auth-modal")) dismissAuth();
+});
+
+function dismissAuth() {
+  document.getElementById("auth-modal").classList.add("hidden");
+  localStorage.setItem("gains_auth_dismissed", "1");
+}
+</script>
+</body>
+</html>
