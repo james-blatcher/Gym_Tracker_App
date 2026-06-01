@@ -52,7 +52,7 @@
     .app-title { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 2.5px; color: var(--accent); line-height: 1; }
     .app-subtitle { font-family: 'Inconsolata', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 3px; }
     .header-right { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
-    .done-badge { font-family: 'Inconsolata', monospace; font-size: 10px; color: var(--accent); background: var(--accentDim); border: 1px solid var(--accentBrd); border-radius: 5px; padding: 3px 8px; }
+    .done-badge { font-family: 'Inconsolata', monospace; font-size: 10px; color: var(--accent); background: var(--accentDim); border: 1px solid var(--accentBrd); border-radius: 5px; padding: 3px 8px; white-space: nowrap; }
 
     .icon-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 5px 10px; border-radius: 5px; font-size: 11px; font-family: 'Barlow', sans-serif; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; }
     .icon-btn:active { transform: scale(0.96); }
@@ -235,8 +235,18 @@
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// PROGRAMME DATA (Updated w/ Other, Cardio & Abs)
+// PROGRAMME DATA (Shared Abs & Cardio)
 // ─────────────────────────────────────────────────────────────────────────────
+const SHARED_ABS = [
+  { id: "sit_ups", name: "Sit Ups", sets: 1, reps: 20, isAbs: true },
+  { id: "knee_tucks", name: "Knee Tucks", sets: 3, reps: 15, isAbs: true },
+  { id: "other_abs", name: "Other", isOther: true, isAbs: true, sets: 4, reps: 15, alternates: [] }
+];
+
+const SHARED_CARDIO = [
+  { id: "cardio", name: "Cardio Session", isCardio: true, sets: 1, reps: 1 }
+];
+
 const PROGRAM = {
   Pull: {
     BACK: [
@@ -251,12 +261,8 @@ const PROGRAM = {
       { id: "barbell_forearm_curls", name: "Barbell Forearm Curls", sets: 4, reps: 8 },
       { id: "other_biceps", name: "Other", isOther: true, sets: 4, reps: 8, alternates: ["Preacher curls, EZ bar", "Standing EZ bar curls", "Standing BB curls", "Cable curls"] }
     ],
-    ABS: [
-      { id: "sit_ups_pull", name: "Sit Ups", sets: 3, reps: 15 },
-      { id: "knee_tucks_pull", name: "Knee Tucks", sets: 3, reps: 15 },
-      { id: "other_abs_pull", name: "Other", isOther: true, sets: 3, reps: 15, alternates: [] }
-    ],
-    CARDIO: [ { id: "cardio_pull", name: "Cardio Session", isCardio: true, sets: 1, reps: 1 } ]
+    ABS: SHARED_ABS,
+    CARDIO: SHARED_CARDIO
   },
   Push: {
     CHEST: [
@@ -271,12 +277,8 @@ const PROGRAM = {
       { id: "tricep_cable_pushdown", name: "Tricep Cable Push Down", sets: 4, reps: 12 },
       { id: "other_triceps", name: "Other", isOther: true, sets: 4, reps: 10, alternates: ["Tricep cable rope", "Tricep cable extension", "Tricep cable reverse extensions", "Ez bar skull crushers"] }
     ],
-    ABS: [
-      { id: "sit_ups_push", name: "Sit Ups", sets: 3, reps: 15 },
-      { id: "knee_tucks_push", name: "Knee Tucks", sets: 3, reps: 15 },
-      { id: "other_abs_push", name: "Other", isOther: true, sets: 3, reps: 15, alternates: [] }
-    ],
-    CARDIO: [ { id: "cardio_push", name: "Cardio Session", isCardio: true, sets: 1, reps: 1 } ]
+    ABS: SHARED_ABS,
+    CARDIO: SHARED_CARDIO
   },
   "Legs/Shoulders": {
     LEGS: [
@@ -294,12 +296,8 @@ const PROGRAM = {
       { id: "rear_delts", name: "Rear Delts", sets: 4, reps: 10 },
       { id: "other_shoulders", name: "Other", isOther: true, sets: 4, reps: 10, alternates: ["DB Lat raises"] }
     ],
-    ABS: [
-      { id: "sit_ups_legs", name: "Sit Ups", sets: 3, reps: 15 },
-      { id: "knee_tucks_legs", name: "Knee Tucks", sets: 3, reps: 15 },
-      { id: "other_abs_legs", name: "Other", isOther: true, sets: 3, reps: 15, alternates: [] }
-    ],
-    CARDIO: [ { id: "cardio_legs", name: "Cardio Session", isCardio: true, sets: 1, reps: 1 } ]
+    ABS: SHARED_ABS,
+    CARDIO: SHARED_CARDIO
   },
 };
 
@@ -327,8 +325,14 @@ let cardioUnit = "kph";
 
 // Set Progress & Dynamic Exercise State
 let completedSets = {}; 
-let otherSelectState = {}; // { exId: "Deadlift" or "manual" }
-let otherManualNames = {}; // { exId: "Custom Name" }
+let otherSelectState = {}; 
+let otherManualNames = {}; 
+
+// Global Stopwatch State
+let swInterval = null;
+let swTime = 0;
+let swActive = false;
+let swTarget = 90; // Default 90s
 
 // Google Sync
 let gsiLoaded = false, tokenClient = null, accessToken = null;
@@ -346,6 +350,57 @@ function loadData() {
 function persist(next) {
   sessions = next;
   try { localStorage.setItem("gains_v1", JSON.stringify(next)); } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOBAL STOPWATCH LOGIC
+// ─────────────────────────────────────────────────────────────────────────────
+function updateTimerUI() {
+  const disp = document.getElementById('sw-disp');
+  const bar = document.getElementById('sw-bar');
+  if (disp && bar) {
+    const mins = Math.floor(swTime / 60);
+    const secs = swTime % 60;
+    disp.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const pct = Math.min(100, (swTime / swTarget) * 100);
+    bar.style.width = pct + '%';
+    bar.style.background = (swTime >= swTarget) ? 'var(--green)' : 'var(--accent)';
+  }
+}
+
+function toggleTimer(target) {
+  swTarget = target;
+  const btn = document.getElementById('sw-btn-start');
+  if (swActive) {
+    clearInterval(swInterval);
+    swActive = false;
+    if (btn) {
+      btn.textContent = 'START';
+      btn.setAttribute('style', 'border-color:var(--accent); color:var(--accent);');
+    }
+  } else {
+    swActive = true;
+    if (btn) {
+      btn.textContent = 'STOP';
+      btn.setAttribute('style', 'background:var(--surface2); color:var(--text); border-color:var(--border);');
+    }
+    swInterval = setInterval(() => {
+      swTime++;
+      updateTimerUI();
+    }, 1000);
+  }
+}
+
+function resetTimer() {
+  clearInterval(swInterval);
+  swActive = false;
+  swTime = 0;
+  updateTimerUI();
+  const btn = document.getElementById('sw-btn-start');
+  if (btn) {
+    btn.textContent = 'START';
+    btn.setAttribute('style', 'border-color:var(--accent); color:var(--accent);');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,7 +441,7 @@ function logCardioEntry(ex, subgroup) {
   let dist = parseFloat(cardioDist);
   let speed = parseFloat(cardioSpeed);
   if (isNaN(dist) || isNaN(speed) || dist <= 0 || speed <= 0) return;
-  if (cardioUnit === "mph") speed = speed * 1.60934; // Convert to kph
+  if (cardioUnit === "mph") speed = speed * 1.60934; 
 
   const entry = {
     id: Date.now().toString(), date: today, exerciseId: ex.id, exerciseName: ex.name,
@@ -480,7 +535,6 @@ async function createSpreadsheet() {
     spreadsheetId = data.spreadsheetId;
     localStorage.setItem("gains_sheet_id", spreadsheetId);
 
-    // FIXED: Call append directly using fetch instead of the missing appendRows function
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:J1:append?valueInputOption=USER_ENTERED`, {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -543,9 +597,8 @@ function renderLog() {
     html += `<div class="subgroup-label">${subgroup}</div>`;
     exercises.forEach(baseEx => {
       const isOn = selectedId === baseEx.id;
-      const resEx = isOn ? getResolvedEx(baseEx) : baseEx; // Resolve dynamic name if open
+      const resEx = isOn ? getResolvedEx(baseEx) : baseEx; 
       
-      // Determine if logged
       let todayW = null, lastW = null, pb = null, isLogged = false;
       if (baseEx.isCardio) {
         isLogged = getTodayLog().some(s => s.exerciseId === baseEx.id);
@@ -575,7 +628,6 @@ function renderLog() {
         weightRight = `<div style="font-size:9px;color:var(--dim);letter-spacing:.5px">NO DATA</div>`;
       }
 
-      // Base Name display logic
       let dispName = baseEx.name;
       if (baseEx.isOther && isLogged) {
         const loggedEntry = getTodayLog().find(s => s.exerciseId.startsWith(baseEx.id));
@@ -597,11 +649,9 @@ function renderLog() {
           </div>
         </div>`;
 
-      // Expand Panel
       if (isOn) {
         html += `<div class="expand-panel">`;
 
-        // Other Dropdown Menu UI
         if (baseEx.isOther) {
           const sel = otherSelectState[baseEx.id] || (baseEx.alternates[0] || "manual");
           const opts = baseEx.alternates.map(a => `<option value="${a}" ${sel===a?"selected":""}>${a}</option>`).join("");
@@ -616,7 +666,6 @@ function renderLog() {
           }
         }
 
-        // Cardio Inputs
         if (baseEx.isCardio) {
           html += `
             <div class="input-row">
@@ -630,7 +679,6 @@ function renderLog() {
             <button class="log-btn" style="width:100%; padding:14px" onclick="logWeight(); event.stopPropagation()">LOG CARDIO</button>
           `;
         } else {
-          // Normal Inputs (Weight & Reps) + Tracker
           const chips = lastW !== null ? [lastW - 2.5, lastW, lastW + 2.5, lastW + 5].filter(v => v > 0) : [];
           html += `<div class="stat-row">
               <div class="stat-box"><div class="stat-box-label">LAST</div><div class="stat-box-val">${lastW !== null ? lastW + " kg" : "—"}</div></div>
@@ -658,6 +706,29 @@ function renderLog() {
                 <button class="chip" style="width:100%; border-color:var(--accent); color:var(--accent)" onclick="logSet('${baseEx.id}', ${resEx.sets}); event.stopPropagation()">✓ COMPLETE SET</button>
             </div>
           `;
+          
+          // GLOBAL STOPWATCH
+          const target = (baseEx.id === 'bench' || baseEx.id === 'squats') ? 120 : 90;
+          if (swTarget === 0 || !swActive) swTarget = target; 
+
+          const mins = Math.floor(swTime / 60);
+          const secs = swTime % 60;
+          const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+          const pct = Math.min(100, (swTime / swTarget) * 100);
+          const barColor = (swTime >= swTarget) ? 'var(--green)' : 'var(--accent)';
+
+          html += `
+            <div class="stopwatch-container" onclick="event.stopPropagation()" style="margin-top:12px; background:var(--bg); padding:10px; border-radius:6px; border:1px solid var(--border);">
+               <div style="font-size:10px; color:var(--muted); letter-spacing:1px; font-weight:700; margin-bottom:4px;">REST TIMER</div>
+               <div id="sw-disp" style="color:var(--accent); font-family:'Bebas Neue', sans-serif; font-size:32px; text-align:center; letter-spacing:3px; margin-bottom:4px; line-height:1;">${timeStr}</div>
+               <div class="set-bar-bg" style="height:6px; margin-bottom:12px;">
+                 <div id="sw-bar" class="set-bar-fill" style="width:${pct}%; background:${barColor}; transition:none;"></div>
+               </div>
+               <div class="chips-row" style="margin-top:0">
+                 <button id="sw-btn-start" class="chip" style="${swActive ? 'background:var(--surface2); color:var(--text); border-color:var(--border);' : 'border-color:var(--accent); color:var(--accent);'}" onclick="toggleTimer(${target}); event.stopPropagation()">${swActive ? 'STOP' : 'START'}</button>
+                 <button class="chip" onclick="resetTimer(); event.stopPropagation()">RESET</button>
+               </div>
+            </div>`;
         }
         html += `</div>`;
       }
@@ -681,7 +752,7 @@ function renderHistory() {
         html += `<div class="hist-entry"><div><div class="hist-name">${s.exerciseName}</div><div class="hist-meta">${s.subgroup || s.category}</div></div>
                  <div><div class="hist-weight">${s.distance}<span style="font-size:10px;color:var(--muted)"> dist</span></div><div class="hist-pb" style="color:var(--muted)">${s.speed} kph</div></div></div>`;
       } else {
-        const pb = getPB(s.exerciseId, findExercise(s.exerciseId.split('_manual')[0].split('_')[0])?.lowerIsBetter); // rough fallback
+        const pb = getPB(s.exerciseId, findExercise(s.exerciseId.split('_manual')[0].split('_')[0])?.lowerIsBetter); 
         const isBest = pb !== null && s.weight === pb;
         html += `<div class="hist-entry ${isBest ? "is-pb" : ""}">
                   <div><div class="hist-name">${s.exerciseName}</div><div class="hist-meta">${s.sets} × ${s.reps} · ${s.subgroup || s.category}</div></div>
@@ -695,7 +766,6 @@ function renderHistory() {
 }
 
 function renderPBs() {
-  // Aggregate unique exercises from history (to capture "Other" variations)
   let bests = {};
   sessions.filter(s => !s.isCardio && s.weight).forEach(s => {
     if(!bests[s.exerciseId] || s.weight > bests[s.exerciseId].weight) bests[s.exerciseId] = s;
@@ -703,13 +773,17 @@ function renderPBs() {
 
   let html = `<button class="modal-btn" style="margin-bottom:20px; font-size:15px; padding:10px" onclick="openLegacyModal()">+ ADD LEGACY PB</button>`;
   
+  let renderedPBs = new Set();
+  
   Object.entries(PROGRAM).forEach(([cat, groups]) => {
     html += `<div style="margin-bottom:26px"><div class="hist-date-label" style="color:var(--accent);border-bottom:1px solid var(--accentBrd)"><span>${cat.toUpperCase()}</span></div><div>`;
     Object.entries(groups).forEach(([sg, exs]) => {
       html += `<div class="subgroup-label">${sg}</div>`;
       exs.forEach(baseEx => {
         if(baseEx.isCardio) return;
-        // Find all logged variations for this base ID
+        if(renderedPBs.has(baseEx.id)) return;
+        renderedPBs.add(baseEx.id);
+        
         const loggedVars = Object.values(bests).filter(b => b.exerciseId.startsWith(baseEx.id));
         if(!loggedVars.length) {
             html += `<div class="hist-entry"><div><div class="hist-name">${baseEx.name}</div></div><div class="hist-weight" style="color:var(--dim)">—</div></div>`;
@@ -747,10 +821,38 @@ function switchView(v) {
   document.getElementById("scroll-area").scrollTop = 0;
   if (v === "history") renderHistory(); if (v === "pbs") renderPBs();
 }
+
 function updateDoneBadge() {
   const badge = document.getElementById("done-badge");
-  const todayN = getTodayLog().length; const totalN = allExercises(category).length;
-  if (todayN > 0) { badge.style.display = "block"; badge.textContent = `${todayN}/${totalN} done`; } else badge.style.display = "none";
+  let mandatoryCount = 0;
+  let loggedMandatory = 0;
+  let loggedBonus = 0;
+  
+  Object.entries(PROGRAM[category]).forEach(([sg, exs]) => {
+    if (sg === "ABS" || sg === "CARDIO") {
+      exs.forEach(ex => {
+        if (getTodayLog().some(s => s.exerciseId.startsWith(ex.id))) loggedBonus++;
+      });
+    } else {
+      let blockMandatory = exs.filter(e => !e.isOther).length;
+      mandatoryCount += blockMandatory;
+      let blockLogged = 0;
+      exs.forEach(ex => {
+        if (getTodayLog().some(s => s.exerciseId.startsWith(ex.id))) blockLogged++;
+      });
+      // "OR" logic: Caps at mandatory count, meaning 'Other' acts as a valid replacement
+      loggedMandatory += Math.min(blockMandatory, blockLogged); 
+    }
+  });
+
+  if (loggedMandatory > 0 || loggedBonus > 0) {
+    badge.style.display = "block";
+    let txt = `${loggedMandatory}/${mandatoryCount} done`;
+    if (loggedBonus > 0) txt += ` + ${loggedBonus}/4 bonus`;
+    badge.textContent = txt;
+  } else {
+    badge.style.display = "none";
+  }
 }
 
 let toastTimer = null;
@@ -769,9 +871,15 @@ function dismissAuth() { document.getElementById("auth-modal").classList.add("hi
 function openLegacyModal() {
   const select = document.getElementById("legacy-ex");
   let opts = "";
+  let seenLegacy = new Set();
   Object.entries(PROGRAM).forEach(([cat, groups]) => {
     Object.entries(groups).forEach(([sg, exs]) => {
-       exs.forEach(ex => { if(!ex.isOther && !ex.isCardio) opts += `<option value="${ex.id}">${ex.name} (${cat})</option>`; });
+       exs.forEach(ex => { 
+         if(!ex.isOther && !ex.isCardio && !seenLegacy.has(ex.id)) {
+           seenLegacy.add(ex.id);
+           opts += `<option value="${ex.id}">${ex.name} (${cat})</option>`; 
+         }
+       });
     });
   });
   select.innerHTML = opts;
