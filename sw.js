@@ -1,4 +1,4 @@
-const CACHE = 'gains-v3';
+const CACHE = 'gains-v4';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
