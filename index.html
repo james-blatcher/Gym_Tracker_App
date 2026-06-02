@@ -123,7 +123,8 @@
     .history-inner { padding: 14px 18px; }
     .hist-date-label { font-family: 'Bebas Neue', sans-serif; font-size: 12px; letter-spacing: 2.5px; margin-bottom: 8px; padding-bottom: 5px; display: flex; align-items: center; justify-content: space-between; }
     .today-chip { font-size: 9px; background: var(--accentDim); border: 1px solid var(--accentBrd); padding: 2px 7px; border-radius: 4px; }
-    .hist-entry { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border-radius: 6px; margin-bottom: 5px; border: 1px solid var(--border); }
+    .hist-entry { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border-radius: 6px; margin-bottom: 5px; border: 1px solid var(--border); cursor: pointer; }
+    .hist-entry:active { transform: scale(0.98); }
     .hist-entry.is-pb { border-color: var(--accentBrd); }
     .hist-name { font-weight: 600; font-size: 13px; }
     .hist-meta { font-family: 'Inconsolata', monospace; font-size: 10px; color: var(--muted); margin-top: 1px; }
@@ -199,14 +200,14 @@
 
 <div id="legacy-modal" class="modal-overlay hidden">
   <div class="modal-sheet">
-    <div class="modal-title">ADD LEGACY PB</div>
-    <div style="font-size:12px; color:var(--muted); margin-bottom:15px">Saves an entry as Jan 1st, 2020.</div>
+    <div class="modal-title" id="legacy-modal-title">ADD PB TO SHEET</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:15px">Saves directly to the "PBs" tab in your Google Sheet.</div>
     <select id="legacy-ex" class="custom-select" style="margin-bottom:12px"></select>
     <div class="input-row">
       <input id="legacy-w" type="number" step="0.5" class="custom-input" placeholder="Weight (kg)">
       <input id="legacy-r" type="number" class="custom-input" placeholder="Reps">
     </div>
-    <button class="modal-btn" onclick="saveLegacyPB()">SAVE LEGACY PB</button>
+    <button class="modal-btn" onclick="saveLegacyPB()">SAVE PB</button>
     <button class="modal-skip" onclick="document.getElementById('legacy-modal').classList.add('hidden')">Cancel</button>
   </div>
 </div>
@@ -239,7 +240,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const SHARED_ABS = [
   { id: "sit_ups", name: "Sit Ups", sets: 1, reps: 20, isAbs: true },
-  { id: "knee_tucks", name: "Knee Tucks", sets: 4, reps: 12, isAbs: true },
+  { id: "knee_tucks", name: "Knee Tucks", sets: 4, reps: 15, isAbs: true },
   { id: "other_abs", name: "Other", isOther: true, isAbs: true, sets: 4, reps: 15, alternates: [] }
 ];
 
@@ -316,6 +317,7 @@ const fmtDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { wee
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 let sessions = [];
+let pbSheetData = [];
 let category = "Pull";
 let selectedId = null;
 let currentView = "log";
@@ -351,7 +353,10 @@ let isSyncing = false;
 // PERSISTENCE
 // ─────────────────────────────────────────────────────────────────────────────
 function loadData() {
-  try { const r = localStorage.getItem("gains_v1"); if (r) sessions = JSON.parse(r); } catch {}
+  try { 
+    const r = localStorage.getItem("gains_v1"); if (r) sessions = JSON.parse(r); 
+    const p = localStorage.getItem("gains_pbs"); if (p) pbSheetData = JSON.parse(p);
+  } catch {}
 }
 function persist(next) {
   sessions = next;
@@ -424,10 +429,12 @@ function getResolvedEx(ex) {
 
 function getTodayLog() { return sessions.filter(s => s.date === today); }
 
-function getPB(resolvedId, lowerIsBetter) {
-  const ws = sessions.filter(s => s.exerciseId === resolvedId && s.weight).map(s => s.weight);
-  if (!ws.length) return null;
-  return lowerIsBetter ? Math.min(...ws) : Math.max(...ws);
+function getPB(resolvedId, lowerIsBetter, excludeDate = null) {
+  let ws = sessions.filter(s => s.exerciseId === resolvedId && s.weight && s.date !== excludeDate).map(s => s.weight);
+  let manualPBs = pbSheetData.filter(p => p.exerciseId === resolvedId).map(p => p.weight);
+  let all = [...ws, ...manualPBs];
+  if (!all.length) return null;
+  return lowerIsBetter ? Math.min(...all) : Math.max(...all);
 }
 
 function getLastWeight(resolvedId) {
@@ -437,6 +444,7 @@ function getLastWeight(resolvedId) {
 }
 
 function getTodayWeight(resolvedId) { return getTodayLog().find(s => s.exerciseId === resolvedId)?.weight ?? null; }
+function getTodayReps(resolvedId) { return getTodayLog().find(s => s.exerciseId === resolvedId)?.reps ?? null; }
 
 function logSet(exId, totalSets) {
   completedSets[exId] = (completedSets[exId] || 0) + 1;
@@ -451,7 +459,7 @@ function logCardioEntry(ex, subgroup) {
 
   const entry = {
     id: Date.now().toString(), date: today, exerciseId: ex.id, exerciseName: ex.name,
-    category, subgroup, isCardio: true, distance: dist, speed: speed.toFixed(2), sets: 1, reps: 1
+    category, subgroup, isCardio: true, distance: dist, speed: speed.toFixed(2), sets: 1, reps: 1, isNewPB: false
   };
   
   const filtered = sessions.filter(s => !(s.exerciseId === ex.id && s.date === today));
@@ -475,13 +483,13 @@ function logWeight() {
   const r = parseInt(repInput) || ex.reps;
   if (isNaN(w) || w <= 0) return;
 
-  const pb = getPB(ex.id, baseEx.lowerIsBetter);
-  const isNewPB = pb === null ? true : (baseEx.lowerIsBetter ? w < pb : w > pb);
+  const prevPB = getPB(ex.id, baseEx.lowerIsBetter, today);
+  const isNewPB = prevPB === null ? true : (baseEx.lowerIsBetter ? w < prevPB : w > prevPB);
 
   const entry = {
     id: Date.now().toString(), date: today,
     exerciseId: ex.id, exerciseName: ex.name,
-    category, subgroup, weight: w, sets: ex.sets, reps: r,
+    category, subgroup, weight: w, sets: ex.sets, reps: r, isNewPB: isNewPB
   };
 
   const filtered = sessions.filter(s => !(s.exerciseId === ex.id && s.date === today));
@@ -494,8 +502,42 @@ function logWeight() {
   renderLog(); updateDoneBadge();
 }
 
+async function unlogWeight(baseId) {
+  // Find in local syncQueue and remove if not yet pushed
+  const qIdx = syncQueue.findIndex(q => q.entry.exerciseId.startsWith(baseId) && q.entry.date === today);
+  if (qIdx >= 0) syncQueue.splice(qIdx, 1);
+
+  // SAFETY CHECK: Ensure we ONLY target today's entry
+  const sIdx = sessions.findIndex(s => s.exerciseId.startsWith(baseId) && s.date === today);
+  if (sIdx >= 0) {
+    const sess = sessions[sIdx];
+    
+    // Double-lock safeguard: explicitly verify date string
+    if (sess.date !== today) {
+        showToast("Cannot delete past data", "error");
+        return;
+    }
+
+    sessions.splice(sIdx, 1);
+    persist(sessions);
+    
+    // Actively delete from sheet if it was already pushed (has a rowIndex)
+    if (sess.rowIndex && accessToken) {
+      try {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A${sess.rowIndex}:K${sess.rowIndex}?valueInputOption=USER_ENTERED`, {
+          method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ values: [["", "", "", "", "", "", "", "", "", "", ""]] })
+        });
+      } catch(e) {}
+    }
+  }
+  showToast("Entry removed");
+  selectedId = null;
+  renderLog(); updateDoneBadge();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// GOOGLE SHEETS SYNC
+// GOOGLE SHEETS SYNC (Bi-Directional)
 // ─────────────────────────────────────────────────────────────────────────────
 function loadGSI() {
   if (gsiLoaded || !clientId) return;
@@ -509,7 +551,7 @@ function loadGSI() {
         accessToken = resp.access_token;
         updateSyncBtn();
         showToast("Connected to Google ✓", "teal");
-        if (!spreadsheetId) createSpreadsheet(); else flushQueue();
+        if (!spreadsheetId) createSpreadsheet(); else flushQueue(); // flushQueue automatically triggers a pull
       },
     });
   };
@@ -520,7 +562,7 @@ function requestToken() { if(tokenClient) tokenClient.requestAccessToken({ promp
 function handleSyncBtn() {
   if (!clientId) return document.getElementById("auth-modal").classList.remove("hidden");
   if (!accessToken) { if (!gsiLoaded) loadGSI(); setTimeout(() => requestToken(), 800); return; }
-  flushQueue();
+  flushQueue(); // Pushes changes, then pulls latest sheet
 }
 
 function updateSyncBtn() {
@@ -535,22 +577,27 @@ async function createSpreadsheet() {
     const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ properties: { title: "Gains-O-Matic" }, sheets: [{ properties: { title: "Sessions" } }] }),
+      body: JSON.stringify({ 
+        properties: { title: "Gains-O-Matic" }, 
+        sheets: [{ properties: { title: "Sessions" } }, { properties: { title: "PBs" } }] 
+      }),
     });
     const data = await res.json();
     spreadsheetId = data.spreadsheetId;
     localStorage.setItem("gains_sheet_id", spreadsheetId);
 
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:J1:append?valueInputOption=USER_ENTERED`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: [["Date", "Category", "Subgroup", "Exercise", "Sets", "Reps", "Weight (kg)", "Distance", "Speed (kph)", "PB?"]] })
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:K1:append?valueInputOption=USER_ENTERED`, {
+      method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [["Date", "Category", "Subgroup", "Exercise", "Sets", "Reps", "Weight (kg)", "Distance", "Speed (kph)", "PB?", "Exercise ID"]] })
+    });
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/PBs!A1:D1:append?valueInputOption=USER_ENTERED`, {
+      method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: [["Exercise ID", "Exercise Name", "Weight", "Reps"]] })
     });
 
     hideSyncBar(); showToast("Sheet created ✓", "teal"); flushQueue();
   } catch (e) {
-    hideSyncBar();
-    document.getElementById("sync-btn").classList.remove("syncing");
+    hideSyncBar(); document.getElementById("sync-btn").classList.remove("syncing");
     showToast("Sheet creation failed", "error");
   }
 }
@@ -558,24 +605,64 @@ async function createSpreadsheet() {
 function queueSync(entry, isPB) { syncQueue.push({ entry, isPB }); if (accessToken) flushQueue(); }
 
 async function flushQueue() {
-  if (isSyncing || !syncQueue.length || !accessToken || !spreadsheetId) return;
+  if (isSyncing || !accessToken || !spreadsheetId) return;
   isSyncing = true; showSyncBar();
   const batch = [...syncQueue]; syncQueue = [];
 
-  const rows = batch.map(({ entry, isPB }) => [
-    entry.date, entry.category, entry.subgroup, entry.exerciseName, entry.sets, entry.reps, 
-    entry.weight || "", entry.distance || "", entry.speed || "", isPB ? "PB" : "",
-  ]);
+  if (batch.length > 0) {
+    const rows = batch.map(({ entry, isPB }) => [
+      entry.date, entry.category, entry.subgroup, entry.exerciseName, entry.sets, entry.reps, 
+      entry.weight || "", entry.distance || "", entry.speed || "", isPB ? "PB" : "", entry.exerciseId
+    ]);
 
+    try {
+      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:K1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+        method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: rows }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      syncQueue = [...batch, ...syncQueue]; hideSyncBar(); showToast("Sync failed", "error"); isSyncing = false; return;
+    }
+  }
+
+  // Pull latest data to make spreadsheet the Source of Truth
   try {
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sessions!A1:J1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-      method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ values: rows }),
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?ranges=Sessions!A2:K&ranges=PBs!A2:D`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
-    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const sessionRows = data.valueRanges[0].values || [];
+    const pbRows = data.valueRanges[1].values || [];
+
+    let newSessions = [];
+    sessionRows.forEach((row, i) => {
+      if (!row[0] || !row[10]) return; // Skip empty rows or missing IDs
+      newSessions.push({
+        rowIndex: i + 2, date: row[0], category: row[1], subgroup: row[2], exerciseName: row[3],
+        sets: parseInt(row[4]), reps: parseInt(row[5]),
+        weight: parseFloat(row[6]), distance: parseFloat(row[7]), speed: parseFloat(row[8]),
+        isNewPB: row[9] === "PB", exerciseId: row[10]
+      });
+    });
+
+    let newPBs = [];
+    pbRows.forEach((row, i) => {
+      if (!row[0]) return;
+      newPBs.push({ pbRowIndex: i + 2, exerciseId: row[0], exerciseName: row[1], weight: parseFloat(row[2]), reps: parseInt(row[3]) });
+    });
+
+    // Re-append anything currently in queue that wasn't just pushed
+    syncQueue.forEach(q => newSessions.push(q.entry));
+
+    sessions = newSessions;
+    pbSheetData = newPBs;
+    persist(sessions);
+    localStorage.setItem("gains_pbs", JSON.stringify(pbSheetData));
+    
+    hideSyncBar(); updateSyncBtn(); renderAll();
+  } catch (e) {
     hideSyncBar(); updateSyncBtn();
-  } catch {
-    syncQueue = [...batch, ...syncQueue]; hideSyncBar(); showToast("Sync failed — will retry", "error");
   }
   isSyncing = false;
 }
@@ -605,11 +692,12 @@ function renderLog() {
       const isOn = selectedId === baseEx.id;
       const resEx = isOn ? getResolvedEx(baseEx) : baseEx; 
       
-      let todayW = null, lastW = null, pb = null, isLogged = false;
+      let todayW = null, todayR = null, lastW = null, pb = null, isLogged = false;
       if (baseEx.isCardio) {
         isLogged = getTodayLog().some(s => s.exerciseId === baseEx.id);
       } else {
         todayW = getTodayWeight(resEx.id);
+        todayR = getTodayReps(resEx.id);
         lastW = getLastWeight(resEx.id);
         pb = getPB(resEx.id, baseEx.lowerIsBetter);
         isLogged = todayW !== null;
@@ -625,8 +713,10 @@ function renderLog() {
         if(baseEx.isCardio) {
           weightRight = `<div class="ex-weight-val" style="color:var(--green)">DONE</div>`;
         } else {
-          const isTodayPB = pb !== null && todayW === pb;
-          weightRight = `<div class="ex-weight"><div class="ex-weight-val" style="color:${isTodayPB ? "var(--accent)" : "var(--green)"}">${todayW}<span class="ex-weight-unit">kg</span></div>${isTodayPB ? `<div class="ex-pb-badge" style="color:var(--accent)">🏆 PB</div>` : ""}</div>`;
+          // Trophy only shows if they didn't just match the PB, but actually beat it. Handled via isNewPB flag in session
+          const sessionObj = getTodayLog().find(s => s.exerciseId === resEx.id);
+          const earnedTrophy = sessionObj && sessionObj.isNewPB;
+          weightRight = `<div class="ex-weight"><div class="ex-weight-val" style="color:${earnedTrophy ? "var(--accent)" : "var(--green)"}">${todayW}<span class="ex-weight-unit">kg</span></div>${earnedTrophy ? `<div class="ex-pb-badge" style="color:var(--accent)">🏆 NEW PB</div>` : ""}</div>`;
         }
       } else if (lastW !== null && !baseEx.isCardio) {
         weightRight = `<div class="ex-weight-val" style="font-family:'Inconsolata';font-size:14px;color:var(--dim)">${lastW}<span style="font-size:10px">kg</span></div>`;
@@ -658,7 +748,7 @@ function renderLog() {
       if (isOn) {
         html += `<div class="expand-panel">`;
 
-        if (baseEx.isOther) {
+        if (baseEx.isOther && !isLogged) {
           const sel = otherSelectState[baseEx.id] || (baseEx.alternates[0] || "manual");
           const opts = baseEx.alternates.map(a => `<option value="${a}" ${sel===a?"selected":""}>${a}</option>`).join("");
           html += `<select class="custom-select" onchange="otherSelectState['${baseEx.id}']=this.value; renderLog()" onclick="event.stopPropagation()">
@@ -673,36 +763,54 @@ function renderLog() {
         }
 
         if (baseEx.isCardio) {
-          html += `
-            <div class="input-row">
-              <div class="weight-wrap"><input type="number" class="weight-input" placeholder="0.0" value="${cardioDist}" oninput="cardioDist=this.value" onclick="event.stopPropagation()"><span class="kg-label">dist</span></div>
-              <div class="weight-wrap"><input type="number" class="weight-input" placeholder="0.0" value="${cardioSpeed}" oninput="cardioSpeed=this.value" onclick="event.stopPropagation()"><span class="kg-label">speed</span></div>
-              <select class="custom-select" style="width:80px; margin-bottom:0" onchange="cardioUnit=this.value" onclick="event.stopPropagation()">
-                <option value="kph" ${cardioUnit==="kph"?"selected":""}>KPH</option>
-                <option value="mph" ${cardioUnit==="mph"?"selected":""}>MPH</option>
-              </select>
-            </div>
-            <button class="log-btn" style="width:100%; padding:14px" onclick="logWeight(); event.stopPropagation()">LOG CARDIO</button>
-          `;
+          if (!isLogged) {
+            html += `
+              <div class="input-row">
+                <div class="weight-wrap"><input type="number" class="weight-input" placeholder="0.0" value="${cardioDist}" oninput="cardioDist=this.value" onclick="event.stopPropagation()"><span class="kg-label">dist</span></div>
+                <div class="weight-wrap"><input type="number" class="weight-input" placeholder="0.0" value="${cardioSpeed}" oninput="cardioSpeed=this.value" onclick="event.stopPropagation()"><span class="kg-label">speed</span></div>
+                <select class="custom-select" style="width:80px; margin-bottom:0" onchange="cardioUnit=this.value" onclick="event.stopPropagation()">
+                  <option value="kph" ${cardioUnit==="kph"?"selected":""}>KPH</option>
+                  <option value="mph" ${cardioUnit==="mph"?"selected":""}>MPH</option>
+                </select>
+              </div>
+              <button class="log-btn" style="width:100%; padding:14px" onclick="logWeight(); event.stopPropagation()">LOG CARDIO</button>
+            `;
+          } else {
+             html += `<button class="log-btn" style="width:100%; padding:14px; background:var(--surface2); color:var(--accent); border:1px solid var(--accentBrd)" onclick="unlogWeight('${baseEx.id}'); event.stopPropagation()">UN-LOG MISTAKE</button>`;
+          }
         } else {
-          const chips = lastW !== null ? [lastW - 2.5, lastW, lastW + 2.5, lastW + 5].filter(v => v > 0) : [];
-          html += `<div class="stat-row">
-              <div class="stat-box"><div class="stat-box-label">LAST</div><div class="stat-box-val">${lastW !== null ? lastW + " kg" : "—"}</div></div>
-              <div class="stat-box" style="background:var(--accentDim);border-color:var(--accentBrd)"><div class="stat-box-label" style="color:var(--accent)">BEST</div><div class="stat-box-val" style="color:var(--accent)">${pb !== null ? pb + " kg" : "—"}</div></div>
-            </div>
-            <div class="input-row">
-              <div class="weight-wrap">
-                <input class="weight-input" type="number" step="0.5" min="0" value="${weightInput}" placeholder="0.0" oninput="weightInput=this.value" onclick="event.stopPropagation()"/>
-                <span class="kg-label">kg</span>
+          if (!isLogged) {
+            const chips = lastW !== null ? [lastW - 2.5, lastW, lastW + 2.5, lastW + 5].filter(v => v > 0) : [];
+            html += `<div class="stat-row">
+                <div class="stat-box"><div class="stat-box-label">LAST</div><div class="stat-box-val">${lastW !== null ? lastW + " kg" : "—"}</div></div>
+                <div class="stat-box" style="background:var(--accentDim);border-color:var(--accentBrd)"><div class="stat-box-label" style="color:var(--accent)">BEST</div><div class="stat-box-val" style="color:var(--accent)">${pb !== null ? pb + " kg" : "—"}</div></div>
               </div>
-              <div class="weight-wrap" style="flex: 0.6">
-                <input class="weight-input" type="number" min="1" value="${repInput}" placeholder="${resEx.reps}" oninput="repInput=this.value" onclick="event.stopPropagation()"/>
-                <span class="kg-label">reps</span>
+              <div class="input-row">
+                <div class="weight-wrap">
+                  <input class="weight-input" type="number" step="0.5" min="0" value="${weightInput}" placeholder="0.0" oninput="weightInput=this.value" onclick="event.stopPropagation()"/>
+                  <span class="kg-label">kg</span>
+                </div>
+                <div class="weight-wrap" style="flex: 0.6">
+                  <input class="weight-input" type="number" min="1" value="${repInput}" placeholder="${resEx.reps}" oninput="repInput=this.value" onclick="event.stopPropagation()"/>
+                  <span class="kg-label">reps</span>
+                </div>
+                <button class="log-btn" onclick="logWeight(); event.stopPropagation()">LOG</button>
               </div>
-              <button class="log-btn" onclick="logWeight(); event.stopPropagation()">LOG</button>
-            </div>
-            ${chips.length ? `<div class="chips-row">${chips.map(v => `<button class="chip" onclick="setChip(${v}); event.stopPropagation()">${v}</button>`).join("")}</div>` : ""}
-            
+              ${chips.length ? `<div class="chips-row">${chips.map(v => `<button class="chip" onclick="setChip(${v}); event.stopPropagation()">${v}</button>`).join("")}</div>` : ""}
+            `;
+          } else {
+            html += `
+              <div class="stat-row">
+                 <div class="stat-box" style="background:var(--greenDim); border-color:var(--greenBrd)">
+                    <div class="stat-box-label" style="color:var(--green)">LOGGED TODAY</div>
+                    <div class="stat-box-val" style="color:var(--green)">${todayW} kg × ${todayR} reps</div>
+                 </div>
+              </div>
+              <button class="log-btn" style="width:100%; padding:14px; background:var(--surface2); color:var(--accent); border:1px solid var(--accentBrd)" onclick="unlogWeight('${baseEx.id}'); event.stopPropagation()">UN-LOG MISTAKE</button>
+            `;
+          }
+          
+          html += `
             <div class="set-tracker" onclick="event.stopPropagation()">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                     <span style="font-size:10px; color:var(--muted); letter-spacing:1px; font-weight:700">SETS COMPLETED</span>
@@ -723,7 +831,6 @@ function renderLog() {
           const pct = Math.min(100, (swTime / swTarget) * 100);
           const barColor = (swTime >= swTarget) ? 'var(--green)' : 'var(--accent)';
 
-          // FIXED: Font size bumped from 32px to 54px
           html += `
             <div class="stopwatch-container" onclick="event.stopPropagation()" style="margin-top:12px; background:var(--bg); padding:10px; border-radius:6px; border:1px solid var(--border);">
                <div style="font-size:10px; color:var(--muted); letter-spacing:1px; font-weight:700; margin-bottom:4px;">REST TIMER</div>
@@ -759,11 +866,9 @@ function renderHistory() {
         html += `<div class="hist-entry"><div><div class="hist-name">${s.exerciseName}</div><div class="hist-meta">${s.subgroup || s.category}</div></div>
                  <div><div class="hist-weight">${s.distance}<span style="font-size:10px;color:var(--muted)"> dist</span></div><div class="hist-pb" style="color:var(--muted)">${s.speed} kph</div></div></div>`;
       } else {
-        const pb = getPB(s.exerciseId, findExercise(s.exerciseId.split('_manual')[0].split('_')[0])?.lowerIsBetter); 
-        const isBest = pb !== null && s.weight === pb;
-        html += `<div class="hist-entry ${isBest ? "is-pb" : ""}">
+        html += `<div class="hist-entry ${s.isNewPB ? "is-pb" : ""}">
                   <div><div class="hist-name">${s.exerciseName}</div><div class="hist-meta">${s.sets} × ${s.reps} · ${s.subgroup || s.category}</div></div>
-                  <div><div class="hist-weight" style="color:${isBest ? "var(--accent)" : "var(--text)"}">${s.weight}<span style="font-size:10px;color:var(--muted)">kg</span></div>${isBest ? `<div class="hist-pb">🏆 PB</div>` : ""}</div>
+                  <div><div class="hist-weight" style="color:${s.isNewPB ? "var(--accent)" : "var(--text)"}">${s.weight}<span style="font-size:10px;color:var(--muted)">kg</span></div>${s.isNewPB ? `<div class="hist-pb">🏆 NEW PB</div>` : ""}</div>
                 </div>`;
       }
     });
@@ -773,13 +878,14 @@ function renderHistory() {
 }
 
 function renderPBs() {
-  let bests = {};
+  // Aggregate unique exercises from log history
+  let sessionBests = {};
   sessions.filter(s => !s.isCardio && s.weight).forEach(s => {
-    if(!bests[s.exerciseId] || s.weight > bests[s.exerciseId].weight) bests[s.exerciseId] = s;
+    let lowerIsBetter = findExercise(s.exerciseId.split('_manual')[0].split('_')[0])?.lowerIsBetter;
+    if(!sessionBests[s.exerciseId] || (lowerIsBetter ? s.weight < sessionBests[s.exerciseId].weight : s.weight > sessionBests[s.exerciseId].weight)) sessionBests[s.exerciseId] = s;
   });
 
-  let html = `<button class="modal-btn" style="margin-bottom:20px; font-size:15px; padding:10px" onclick="openLegacyModal()">+ ADD LEGACY PB</button>`;
-  
+  let html = `<button class="modal-btn" style="margin-bottom:20px; font-size:15px; padding:10px" onclick="openLegacyModal()">+ ADD PB TO SHEET</button>`;
   let renderedPBs = new Set();
   
   Object.entries(PROGRAM).forEach(([cat, groups]) => {
@@ -791,14 +897,26 @@ function renderPBs() {
         if(renderedPBs.has(baseEx.id)) return;
         renderedPBs.add(baseEx.id);
         
-        const loggedVars = Object.values(bests).filter(b => b.exerciseId.startsWith(baseEx.id));
-        if(!loggedVars.length) {
-            html += `<div class="hist-entry"><div><div class="hist-name">${baseEx.name}</div></div><div class="hist-weight" style="color:var(--dim)">—</div></div>`;
-        } else {
-            loggedVars.forEach(v => {
-                html += `<div class="hist-entry is-pb"><div><div class="hist-name">${v.exerciseName}</div></div>
-                         <div class="hist-weight" style="color:var(--accent)">${v.weight}<span style='font-size:10px;color:var(--muted)'>kg</span></div></div>`;
-            });
+        let foundAny = false;
+        
+        // Find bests from Sessions log
+        const loggedVars = Object.values(sessionBests).filter(b => b.exerciseId.startsWith(baseEx.id));
+        loggedVars.forEach(v => {
+            foundAny = true;
+            html += `<div class="hist-entry is-pb"><div><div class="hist-name">${v.exerciseName}</div><div class="hist-meta">Log Session</div></div>
+                     <div class="hist-weight" style="color:var(--accent)">${v.weight}<span style='font-size:10px;color:var(--muted)'>kg</span></div></div>`;
+        });
+
+        // Find manually entered PBs from the Sheets
+        const manualVars = pbSheetData.filter(b => b.exerciseId.startsWith(baseEx.id));
+        manualVars.forEach(v => {
+            foundAny = true;
+            html += `<div class="hist-entry is-pb" onclick="openLegacyModal('${v.exerciseId}')" style="border-style:dashed"><div><div class="hist-name">${v.exerciseName}</div><div class="hist-meta" style="color:var(--teal)">✎ Sheet PB (Tap to edit)</div></div>
+                     <div class="hist-weight" style="color:var(--teal)">${v.weight}<span style='font-size:10px;color:var(--muted)'>kg</span></div></div>`;
+        });
+
+        if (!foundAny) {
+           html += `<div class="hist-entry"><div><div class="hist-name">${baseEx.name}</div></div><div class="hist-weight" style="color:var(--dim)">—</div></div>`;
         }
       });
     });
@@ -847,7 +965,6 @@ function updateDoneBadge() {
       exs.forEach(ex => {
         if (getTodayLog().some(s => s.exerciseId.startsWith(ex.id))) blockLogged++;
       });
-      // "OR" logic: Caps at mandatory count, meaning 'Other' acts as a valid replacement
       loggedMandatory += Math.min(blockMandatory, blockLogged); 
     }
   });
@@ -874,8 +991,8 @@ function showSetup() { document.getElementById("auth-modal").classList.add("hidd
 function saveSetup() { const cid = document.getElementById("client-id-input").value.trim(); const sid = document.getElementById("sheet-id-input").value.trim(); if (!cid) { showToast("Enter your Client ID", "error"); return; } clientId = cid; localStorage.setItem("gains_client_id", clientId); if (sid) { spreadsheetId = sid; localStorage.setItem("gains_sheet_id", spreadsheetId); } document.getElementById("setup-modal").classList.add("hidden"); loadGSI(); setTimeout(() => requestToken(), 800); }
 function dismissAuth() { document.getElementById("auth-modal").classList.add("hidden"); localStorage.setItem("gains_auth_dismissed", "1"); }
 
-// Legacy PB logic
-function openLegacyModal() {
+// PB Sheet Modal Logic
+function openLegacyModal(editId = null) {
   const select = document.getElementById("legacy-ex");
   let opts = "";
   let seenLegacy = new Set();
@@ -890,8 +1007,24 @@ function openLegacyModal() {
     });
   });
   select.innerHTML = opts;
+  
+  if (editId) {
+     const existing = pbSheetData.find(p => p.exerciseId === editId);
+     if (existing) {
+        select.value = editId;
+        document.getElementById("legacy-w").value = existing.weight;
+        document.getElementById("legacy-r").value = existing.reps;
+        document.getElementById("legacy-modal-title").textContent = "EDIT SHEET PB";
+     }
+  } else {
+     document.getElementById("legacy-w").value = "";
+     document.getElementById("legacy-r").value = "";
+     document.getElementById("legacy-modal-title").textContent = "ADD PB TO SHEET";
+  }
+  
   document.getElementById("legacy-modal").classList.remove("hidden");
 }
+
 function saveLegacyPB() {
   const exId = document.getElementById("legacy-ex").value;
   const w = parseFloat(document.getElementById("legacy-w").value);
@@ -899,16 +1032,30 @@ function saveLegacyPB() {
   if(isNaN(w) || w <= 0) return showToast("Enter valid weight", "error");
   
   const ex = findExercise(exId);
-  const subgroup = Object.entries(PROGRAM[ex.category||"Pull"]).find(([, exs]) => exs.some(e => e.id === ex.id))?.[0] ?? "";
+  let existingIdx = pbSheetData.findIndex(p => p.exerciseId === exId);
   
-  const entry = {
-    id: Date.now().toString(), date: "2020-01-01",
-    exerciseId: ex.id, exerciseName: ex.name,
-    category: "Legacy", subgroup: subgroup, weight: w, sets: 1, reps: r,
-  };
-  persist([...sessions, entry]);
+  if (existingIdx >= 0) {
+     pbSheetData[existingIdx].weight = w;
+     pbSheetData[existingIdx].reps = r;
+     if (accessToken && pbSheetData[existingIdx].pbRowIndex) {
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/PBs!A${pbSheetData[existingIdx].pbRowIndex}:D${pbSheetData[existingIdx].pbRowIndex}?valueInputOption=USER_ENTERED`, {
+           method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, 
+           body: JSON.stringify({values: [[exId, ex.name, w, r]]})
+        });
+     }
+  } else {
+     pbSheetData.push({ exerciseId: exId, exerciseName: ex.name, weight: w, reps: r });
+     if (accessToken) {
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/PBs!A1:D1:append?valueInputOption=USER_ENTERED`, {
+           method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, 
+           body: JSON.stringify({values: [[exId, ex.name, w, r]]})
+        }).then(() => flushQueue()); // Fetch fresh row indexes
+     }
+  }
+  
+  localStorage.setItem("gains_pbs", JSON.stringify(pbSheetData));
   document.getElementById("legacy-modal").classList.add("hidden");
-  showToast("Legacy PB Saved!");
+  showToast("PB Saved!");
   renderPBs();
 }
 
