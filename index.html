@@ -303,7 +303,13 @@ const PROGRAM = {
 
 const allExercises = cat => Object.values(PROGRAM[cat]).flat();
 const findExercise = id => Object.values(PROGRAM).flatMap(g => Object.values(g).flat()).find(e => e.id === id);
-const todayISO = () => new Date().toISOString().split("T")[0];
+
+// Fixed date function: 4 AM Reset
+const todayISO = () => {
+  const d = new Date();
+  if (d.getHours() < 4) d.setDate(d.getDate() - 1);
+  return d.toISOString().split("T")[0];
+};
 const fmtDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -717,10 +723,11 @@ function renderLog() {
           const pct = Math.min(100, (swTime / swTarget) * 100);
           const barColor = (swTime >= swTarget) ? 'var(--green)' : 'var(--accent)';
 
+          // FIXED: Font size bumped from 32px to 54px
           html += `
             <div class="stopwatch-container" onclick="event.stopPropagation()" style="margin-top:12px; background:var(--bg); padding:10px; border-radius:6px; border:1px solid var(--border);">
                <div style="font-size:10px; color:var(--muted); letter-spacing:1px; font-weight:700; margin-bottom:4px;">REST TIMER</div>
-               <div id="sw-disp" style="color:var(--accent); font-family:'Bebas Neue', sans-serif; font-size:32px; text-align:center; letter-spacing:3px; margin-bottom:4px; line-height:1;">${timeStr}</div>
+               <div id="sw-disp" style="color:var(--accent); font-family:'Bebas Neue', sans-serif; font-size:54px; text-align:center; letter-spacing:3px; margin-bottom:8px; line-height:1;">${timeStr}</div>
                <div class="set-bar-bg" style="height:6px; margin-bottom:12px;">
                  <div id="sw-bar" class="set-bar-fill" style="width:${pct}%; background:${barColor}; transition:none;"></div>
                </div>
@@ -911,6 +918,18 @@ if (!clientId && !localStorage.getItem("gains_auth_dismissed")) setTimeout(() =>
 if (clientId) loadGSI();
 
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(() => {}); }); }
+
+// Automatically refresh the day when the app is reopened
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    const newToday = todayISO();
+    if (today !== newToday) {
+      today = newToday;
+      completedSets = {}; // Reset the set counters
+      renderAll();        // Refresh the UI to a clean slate
+    }
+  }
+});
 </script>
 </body>
 </html>
