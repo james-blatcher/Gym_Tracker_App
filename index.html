@@ -999,7 +999,14 @@ function renderGraph() {
     ermContainer.style.display = "none";
   }
 
-  const labels = dataPoints.map(s => fmtDate(s.date).slice(0, 6));
+  const labels = dataPoints.map(s => {
+    const d = new Date(s.date + "T12:00:00");
+    const day = d.getDate();
+    const month = d.toLocaleString('en-GB', { month: 'short' });
+    const year = d.getFullYear().toString().slice(-2);
+    return `${day} ${month} '${year}`;
+  });
+
   const weights = dataPoints.map(s => s.weight);
 
   if (progressChartInstance) progressChartInstance.destroy();
