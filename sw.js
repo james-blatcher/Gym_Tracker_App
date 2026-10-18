@@ -1,4 +1,4 @@
-const CACHE = 'gains-v7';
+const CACHE = 'gains-v8'; // <-- Updated this to v8
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
